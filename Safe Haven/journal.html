@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>His Safe Haven</title>
+  <script type="module" src="https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js"></script>
+  <script type="module" src="https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background-color: #f4f4f9;
+      color: #333;
+    }
+
+    header {
+      background-color: #6200ea;
+      color: white;
+      width: 100%;
+      padding: 15px;
+      text-align: center;
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .container {
+      margin-top: 20px;
+      width: 90%;
+      max-width: 500px;
+    }
+
+    textarea {
+      width: 100%;
+      height: 100px;
+      margin-bottom: 15px;
+      padding: 10px;
+      font-size: 16px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+
+    button {
+      padding: 10px;
+      font-size: 16px;
+      background-color: #6200ea;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #4b00b6;
+    }
+
+    .entry {
+      margin-top: 20px;
+      background-color: white;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      position: relative;
+    }
+
+    .entry .delete {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background-color: #e53935;
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 25px;
+      height: 25px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .entry .delete:hover {
+      background-color: #c62828;
+    }
+
+    .timestamp {
+      font-size: 12px;
+      color: #777;
+      margin-top: 10px;
+    }
+
+    #pageInfo,
+    #totalEntries {
+      margin: 0 10px;
+      color: #666;
+    }
+
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .pagination button {
+      padding: 10px;
+      font-size: 14px;
+      background-color: #6200ea;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .pagination button:disabled {
+      background-color: #ddd;
+      cursor: not-allowed;
+    }
+
+    .search-bar {
+      margin-top: 20px;
+      display: flex;
+      gap: 10px;
+    }
+
+    .search-bar input {
+      flex: 1;
+      padding: 10px;
+      font-size: 16px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+
+<body>
+  <header>My Diary</header>
+  <div class="container">
+    <textarea id="diaryInput" placeholder="Write your thoughts..."></textarea>
+    <button id="addEntry">Add Entry</button>
+    <div id="entries"></div>
+    <div class="pagination">
+      <span id="pageInfo">Page 1</span>
+      <span id="totalEntries">Total entries: 0</span>
+      <button id="prevPage" disabled>Previous</button>
+      <button id="nextPage" disabled>Next</button>
+    </div>
+    <div class="search-bar">
+      <input type="number" id="pageInput" placeholder="Go to page..." />
+      <button id="goToPage">Go</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js";
+    import { getFirestore, collection, query, orderBy, limit, startAfter, endBefore, getDocs, addDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAcfvUVaI-Vf2KTov2HbzT8zz2TGRffvUo",
+      authDomain: "safe-haven-2025.firebaseapp.com",
+      projectId: "safe-haven-2025",
+      storageBucket: "safe-haven-2025.firebasestorage.app",
+      messagingSenderId: "1006773901595",
+      appId: "1:1006773901595:web:4f551d24323f214d0a1bbe",
+      measurementId: "G-SKCS3E3TPC"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const diaryCollection = collection(db, "diary");
+
+
+    const diaryInput = document.getElementById("diaryInput");
+    const addEntryButton = document.getElementById("addEntry");
+    const entriesDiv = document.getElementById("entries");
+    const prevPageButton = document.getElementById("prevPage");
+    const nextPageButton = document.getElementById("nextPage");
+    const pageInput = document.getElementById("pageInput");
+    const goToPageButton = document.getElementById("goToPage");
+    const pageInfo = document.getElementById("pageInfo");
+    const totalEntriesSpan = document.getElementById("totalEntries");
+
+    let currentPage = 1;
+    const pageSize = 5;
+    let totalPages = 0;
+    let totalEntries = 0;
+
+    async function getTotalEntries() {
+      const snapshot = await getDocs(collection(db, "diary"));
+      totalEntries = snapshot.size;
+      totalPages = Math.ceil(totalEntries / pageSize);
+      totalEntriesSpan.textContent = `Total entries: ${totalEntries}`;
+      return totalEntries;
+    }
+
+    async function getEntriesForPage(page) {
+      let q;
+
+      // First page query
+      if (page === 1) {
+        q = query(
+          diaryCollection,
+          orderBy("timestamp", "desc"),
+          limit(pageSize)
+        );
+      } else {
+        // Get documents before the current page
+        const previousPageSnapshot = await getDocs(
+          query(
+            diaryCollection,
+            orderBy("timestamp", "desc"),
+            limit((page - 1) * pageSize)
+          )
+        );
+
+        if (!previousPageSnapshot.empty) {
+          // Get the last document from previous page
+          const lastVisibleDoc = previousPageSnapshot.docs[previousPageSnapshot.docs.length - 1];
+
+          // Query starting after the last document from previous page
+          q = query(
+            diaryCollection,
+            orderBy("timestamp", "desc"),
+            startAfter(lastVisibleDoc),
+            limit(pageSize)
+          );
+        }
+      }
+
+      return q ? getDocs(q) : null;
+    }
+
+    async function loadPage(page) {
+      try {
+        entriesDiv.innerHTML = '<p>Loading...</p>';
+
+        // Update total entries count
+        await getTotalEntries();
+
+        if (page < 1) page = 1;
+        if (page > totalPages) page = totalPages;
+
+        currentPage = page;
+        pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+
+        const querySnapshot = await getEntriesForPage(page);
+
+        entriesDiv.innerHTML = '';
+
+        if (!querySnapshot || querySnapshot.empty) {
+          entriesDiv.innerHTML = "<p>No entries found!</p>";
+          nextPageButton.disabled = true;
+          prevPageButton.disabled = true;
+          return;
+        }
+
+        querySnapshot.forEach((doc) => {
+          const entry = doc.data();
+          const entryDiv = document.createElement("div");
+          entryDiv.className = "entry";
+          entryDiv.innerHTML = `
+        <p>${entry.content}</p>
+        <p class="timestamp">${new Date(entry.timestamp).toLocaleString()}</p>
+        <button class="delete" data-id="${doc.id}">&times;</button>
+      `;
+          entriesDiv.appendChild(entryDiv);
+        });
+
+        // Update pagination controls
+        prevPageButton.disabled = currentPage <= 1;
+        nextPageButton.disabled = currentPage >= totalPages;
+
+        // Add event listeners to delete buttons
+        document.querySelectorAll(".delete").forEach((button) => {
+          button.addEventListener("click", async (e) => {
+            const id = e.target.getAttribute("data-id");
+            await deleteDoc(doc(diaryCollection, id));
+
+            // Recalculate total pages after deletion
+            const newTotal = await getTotalEntries();
+            const newTotalPages = Math.ceil(newTotal / pageSize);
+
+            // If we're on a page that no longer exists, go to the last page
+            if (currentPage > newTotalPages) {
+              currentPage = newTotalPages;
+            }
+
+            loadPage(currentPage);
+          });
+        });
+
+      } catch (error) {
+        console.error("Error loading page:", error);
+        entriesDiv.innerHTML = "<p>Error loading entries. Please try again.</p>";
+      }
+    }
+
+    // Event listeners
+    addEntryButton.addEventListener("click", async () => {
+      const content = diaryInput.value.trim();
+      if (content) {
+        await addDoc(diaryCollection, { content, timestamp: Date.now() });
+        diaryInput.value = "";
+        // Always load first page when adding new entry
+        loadPage(1);
+      } else {
+        alert("Please write something before adding!");
+      }
+    });
+
+    prevPageButton.addEventListener("click", () => {
+      if (currentPage > 1) {
+        loadPage(currentPage - 1);
+      }
+    });
+
+    nextPageButton.addEventListener("click", () => {
+      if (currentPage < totalPages) {
+        loadPage(currentPage + 1);
+      }
+    });
+
+    goToPageButton.addEventListener("click", () => {
+      const page = parseInt(pageInput.value);
+      if (!isNaN(page) && page > 0 && page <= totalPages) {
+        loadPage(page);
+      } else {
+        alert(`Please enter a valid page number between 1 and ${totalPages}`);
+      }
+    });
+
+    // Initial load
+    loadPage(1);
+  </script>
+</body>
+
+</html>

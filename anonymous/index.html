@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anonymous Messaging App</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      background-color: #f0f2f5;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .auth-section {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .auth-section button {
+      background: #dc3545;
+    }
+
+    .auth-form {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+    }
+
+    .message-form {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .tab {
+      padding: 10px 20px;
+      background: #e9ecef;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .tab.active {
+      background: #1a73e8;
+      color: white;
+    }
+
+    textarea {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      resize: vertical;
+      min-height: 100px;
+    }
+
+    input {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+
+    button {
+      background: #1a73e8;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #1557b0;
+    }
+
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .message-container {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .message-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      color: #666;
+      font-size: 0.9em;
+    }
+
+    .message-content {
+      margin-bottom: 15px;
+      white-space: pre-wrap;
+    }
+
+    .reply-section {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 4px;
+      margin-top: 10px;
+    }
+
+    .admin-controls {
+      margin-top: 10px;
+      display: flex;
+      gap: 10px;
+    }
+
+    .edit-mode textarea {
+      min-height: 60px;
+    }
+
+    .error {
+      color: red;
+      margin: 10px 0;
+    }
+
+    .success {
+      color: green;
+      margin: 10px 0;
+    }
+
+    .badge {
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 0.8em;
+      margin-left: 10px;
+    }
+
+    .badge-pending {
+      background: #ffc107;
+      color: #000;
+    }
+
+    .badge-published {
+      background: #28a745;
+      color: #fff;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div id="authContainer">
+      <!-- Auth section will be dynamically populated -->
+    </div>
+
+    <div class="message-form">
+      <h2>Send Anonymous Message</h2>
+      <input type="text" id="nickname" placeholder="Nickname (optional)">
+      <textarea id="message" placeholder="Type your message here..."></textarea>
+      <button onclick="sendMessage()">Send Message</button>
+      <div id="sendStatus"></div>
+    </div>
+
+    <div id="adminSection" style="display: none;">
+      <div class="tabs">
+        <button class="tab" onclick="switchTab('pending')" id="pendingTab">Pending Messages</button>
+        <button class="tab" onclick="switchTab('published')" id="publishedTab">Published Messages</button>
+      </div>
+    </div>
+
+    <div id="messages"></div>
+  </div>
+
+  <!-- Firebase CDN -->
+  <script type="module">
+    // Import the functions you need from the SDKs you need
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, Timestamp, where } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+    // Your web app's Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyAcfvUVaI-Vf2KTov2HbzT8zz2TGRffvUo",
+      authDomain: "safe-haven-2025.firebaseapp.com",
+      projectId: "safe-haven-2025",
+      storageBucket: "safe-haven-2025.firebasestorage.app",
+      messagingSenderId: "1006773901595",
+      appId: "1:1006773901595:web:4f551d24323f214d0a1bbe",
+      measurementId: "G-SKCS3E3TPC"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    let currentTab = 'published';
+
+    // Authentication state observer
+    onAuthStateChanged(auth, (user) => {
+      const authContainer = document.getElementById('authContainer');
+      const adminSection = document.getElementById('adminSection');
+
+      if (user) {
+        authContainer.innerHTML = `
+                    <div class="auth-section">
+                        <span>Logged in as: ${user.email}</span>
+                        <button onclick="logout()">Logout</button>
+                    </div>
+                `;
+        adminSection.style.display = 'block';
+        switchTab('pending');
+      } else {
+        authContainer.innerHTML = `
+                    <div class="auth-form">
+                        <h2>Admin Login</h2>
+                        <input type="email" id="email" placeholder="Email">
+                        <input type="password" id="password" placeholder="Password">
+                        <button onclick="login()">Login</button>
+                        <div id="loginStatus"></div>
+                    </div>
+                `;
+        adminSection.style.display = 'none';
+        switchTab('published');
+      }
+    });
+
+    // Make functions globally available
+    window.login = async function() {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const loginStatus = document.getElementById('loginStatus');
+
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+      } catch (error) {
+        loginStatus.innerHTML = `<div class="error">${error.message}</div>`;
+      }
+    };
+
+    window.logout = async function() {
+      try {
+        await signOut(auth);
+      } catch (error) {
+        console.error("Error signing out:", error);
+      }
+    };
+
+    window.switchTab = function(tab) {
+      currentTab = tab;
+      document.getElementById('pendingTab')?.classList.toggle('active', tab === 'pending');
+      document.getElementById('publishedTab')?.classList.toggle('active', tab === 'published');
+      loadMessages();
+    };
+
+    window.sendMessage = async function() {
+      const messageInput = document.getElementById('message');
+      const nicknameInput = document.getElementById('nickname');
+      const statusDiv = document.getElementById('sendStatus');
+
+      if (!messageInput.value.trim()) {
+        statusDiv.innerHTML = '<div class="error">Please enter a message</div>';
+        return;
+      }
+
+      try {
+        await addDoc(collection(db, "messages"), {
+          message: messageInput.value.trim(),
+          nickname: nicknameInput.value.trim() || "Anonymous",
+          timestamp: Timestamp.now(),
+          reply: "",
+          isEditing: false,
+          status: "pending" // New messages are pending by default
+        });
+
+        messageInput.value = '';
+        nicknameInput.value = '';
+        statusDiv.innerHTML = '<div class="success">Message sent successfully! It will be visible after moderation.</div>';
+        setTimeout(() => statusDiv.innerHTML = '', 3000);
+      } catch (error) {
+        statusDiv.innerHTML = '<div class="error">Error sending message: ' + error.message + '</div>';
+      }
+    };
+
+    window.toggleEdit = function(messageId) {
+      if (!auth.currentUser) return;
+      const replySection = document.querySelector(`#reply-${messageId}`);
+      const currentReply = replySection.querySelector('.reply-content')?.textContent || '';
+      replySection.innerHTML = `
+                <div class="edit-mode">
+                    <textarea id="edit-${messageId}">${currentReply}</textarea>
+                    <div class="admin-controls">
+                        <button onclick="saveEdit('${messageId}')">Save</button>
+                        <button onclick="loadMessages()">Cancel</button>
+                    </div>
+                </div>
+            `;
+    };
+
+    window.saveEdit = async function(messageId) {
+      if (!auth.currentUser) return;
+      const editedReply = document.querySelector(`#edit-${messageId}`).value;
+      try {
+        await updateDoc(doc(db, "messages", messageId), {
+          reply: editedReply,
+          isEditing: false
+        });
+      } catch (error) {
+        console.error("Error updating reply: ", error);
+      }
+    };
+
+    window.reply = async function(messageId) {
+      if (!auth.currentUser) return;
+      const replyText = document.querySelector(`#reply-input-${messageId}`).value;
+      if (!replyText.trim()) return;
+
+      try {
+        await updateDoc(doc(db, "messages", messageId), {
+          reply: replyText,
+          isEditing: false,
+          status: "published" // Message becomes published when replied to
+        });
+      } catch (error) {
+        console.error("Error saving reply: ", error);
+      }
+    };
+
+    // Load and display messages
+    function loadMessages() {
+      const messagesDiv = document.getElementById('messages');
+      const isAdmin = auth.currentUser !== null;
+
+      // Define query based on current tab and user status
+      let q;
+      if (isAdmin && currentTab === 'pending') {
+        q = query(
+          collection(db, "messages"),
+          where("status", "==", "pending"),
+          orderBy("timestamp", "desc")
+        );
+      } else {
+        q = query(
+          collection(db, "messages"),
+          where("status", "==", "published"),
+          orderBy("timestamp", "desc")
+        );
+      }
+
+      onSnapshot(q, (querySnapshot) => {
+        messagesDiv.innerHTML = '';
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          const messageHtml = `
+                        <div class="message-container">
+                            <div class="message-header">
+                                <span>${data.nickname}</span>
+                                <span>
+                                    ${data.timestamp.toDate().toLocaleString()}
+                                    ${isAdmin ? `
+                                        <span class="badge badge-${data.status}">
+                                            ${data.status}
+                                        </span>
+                                    ` : ''}
+                                </span>
+                            </div>
+                            <div class="message-content">${data.message}</div>
+                            <div class="reply-section" id="reply-${doc.id}">
+                                ${data.reply 
+                                    ? `<div class="reply-content">${data.reply}</div>
+                                       ${isAdmin ? `
+                                           <div class="admin-controls">
+                                               <button onclick="toggleEdit('${doc.id}')">Edit Reply</button>
+                                           </div>
+                                       ` : ''}`
+                                    : isAdmin ? `
+                                        <textarea id="reply-input-${doc.id}" placeholder="Type your reply..."></textarea>
+                                        <div class="admin-controls">
+                                            <button onclick="reply('${doc.id}')">Send Reply</button>
+                                        </div>
+                                    ` : '<p>No reply yet</p>'
+                                }
+                            </div>
+                        </div>
+                    `;
+          messagesDiv.innerHTML += messageHtml;
+        });
+
+        if (querySnapshot.empty) {
+          messagesDiv.innerHTML = `
+                        <div class="message-container">
+                            <p>No ${currentTab} messages found.</p>
+                        </div>
+                    `;
+        }
+      });
+    }
+  </script>
+</body>
+
+</html>

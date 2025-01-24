@@ -179,7 +179,7 @@ const displayCrops = () => {
           playerDisplay();
           displayCrops();
         } else {
-          button.textContent = "max";
+          button.textContent = "not enough";
           button.disabled = true;
         }
       }
